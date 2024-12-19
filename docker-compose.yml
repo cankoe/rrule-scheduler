@@ -1,0 +1,119 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:6.0
+    volumes:
+      - mongo-data:/data/db
+    restart: unless-stopped
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "27017:27017"
+
+  redis:
+    image: redis:7.0
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "6379:6379"
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    command: ["/app/api"]
+    environment:
+      MONGO_URI: "mongodb://mongodb:27017"
+      MONGO_DATABASE: "event_scheduler"
+      REDIS_HOST: "redis"
+      REDIS_PORT: "6379"
+      API_KEYS_USER: "user-api-key-123"
+      API_KEYS_ADMIN: "admin-api-key-456"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - internal
+
+  prequeuer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["/app/prequeuer"]
+    environment:
+      MONGO_URI: "mongodb://mongodb:27017"
+      MONGO_DATABASE: "event_scheduler"
+      REDIS_HOST: "redis"
+      REDIS_PORT: "6379"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - internal
+
+  dispatcher:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["/app/dispatcher"]
+    environment:
+      MONGO_URI: "mongodb://mongodb:27017"
+      MONGO_DATABASE: "event_scheduler"
+      REDIS_HOST: "redis"
+      REDIS_PORT: "6379"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - internal
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["/app/worker"]
+    environment:
+      MONGO_URI: "mongodb://mongodb:27017"
+      MONGO_DATABASE: "event_scheduler"
+      REDIS_HOST: "redis"
+      REDIS_PORT: "6379"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - internal
+
+volumes:
+  mongo-data:
+  redis-data:
+
+networks:
+  internal:

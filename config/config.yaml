@@ -1,0 +1,15 @@
+mongo:
+  uri: "mongodb://localhost:27017"
+  database: "schedulerdb"
+
+redis:
+  host: "localhost"
+  port: 6379
+
+prequeuer:
+  ticker_interval_seconds: 20   # How often the Pre-Queuer runs (in seconds)
+  event_timeframe_minutes: 10   # How many minutes into the future to generate events
+
+api_keys:
+  user: "user-api-key-123"
+  admin: "admin-api-key-456"

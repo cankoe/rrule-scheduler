@@ -1,0 +1,400 @@
+openapi: 3.0.3
+info:
+  title: Event Scheduler API
+  version: 1.0.0
+  description: |
+    The Event Scheduler API allows clients to manage recurring schedules and their events.
+    It provides both user-level and admin-level endpoints.
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+security:
+  - ApiKeyAuth: []
+
+tags:
+  - name: Schedules
+    description: Endpoints for managing schedules (user level)
+  - name: Events
+    description: Endpoints for retrieving event history (user level)
+  - name: Admin
+    description: Administrative endpoints for managing schedules and events
+
+paths:
+  /api/schedules:
+    post:
+      summary: Create a new schedule
+      description: Create a new recurring schedule.
+      tags: [Schedules]
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScheduleCreateRequest'
+      responses:
+        '201':
+          description: Schedule created successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Schedule created successfully."
+        '400':
+          description: Invalid request body.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/schedules/{id}:
+    put:
+      summary: Update an existing schedule
+      description: Update fields of an existing schedule by its ID.
+      tags: [Schedules]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: id
+          description: The ID of the schedule to update
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: A partial update to the schedule (e.g. RRule, CallbackURL)
+              additionalProperties: true
+      responses:
+        '200':
+          description: Schedule updated successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Schedule updated successfully."
+        '400':
+          description: Bad request (missing ID or invalid body).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Schedule not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      summary: Delete a schedule and its associated events
+      description: Delete the specified schedule and all events tied to it.
+      tags: [Schedules]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: id
+          description: The ID of the schedule to delete
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Schedule and associated events deleted successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Schedule and associated events deleted successfully."
+        '400':
+          description: Missing schedule ID.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Schedule not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/schedules/{id}/events:
+    get:
+      summary: Get event history for a schedule
+      description: Retrieve all events generated for a given schedule ID.
+      tags: [Events]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: id
+          description: The ID of the schedule for which to retrieve events
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Events retrieved successfully or no events found.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    properties:
+                      message:
+                        type: string
+                        example: "No events found for the given schedule."
+                  - type: array
+                    items:
+                      $ref: '#/components/schemas/Event'
+        '400':
+          description: Missing schedule ID.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/schedules:
+    get:
+      summary: Get all schedules
+      description: Retrieve all existing schedules (admin only).
+      tags: [Admin]
+      security:
+        - ApiKeyAuth: []
+      responses:
+        '200':
+          description: A list of schedules or a message if none are found.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: array
+                    items:
+                      $ref: '#/components/schemas/Schedule'
+                  - type: object
+                    properties:
+                      message:
+                        type: string
+                        example: "No schedules found."
+        '500':
+          description: Internal server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      summary: Delete all schedules and events
+      description: Removes all schedules and their associated events from the system (admin only).
+      tags: [Admin]
+      security:
+        - ApiKeyAuth: []
+      responses:
+        '200':
+          description: All schedules and events deleted successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "All schedules and events deleted successfully."
+        '500':
+          description: Internal server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/events:
+    get:
+      summary: Get all events
+      description: Retrieve all events in the system (admin only).
+      tags: [Admin]
+      security:
+        - ApiKeyAuth: []
+      responses:
+        '200':
+          description: A list of events or a message if none are found.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: array
+                    items:
+                      $ref: '#/components/schemas/Event'
+                  - type: object
+                    properties:
+                      message:
+                        type: string
+                        example: "No events found."
+        '500':
+          description: Internal server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      summary: Delete all events
+      description: Removes all events from the system (admin only).
+      tags: [Admin]
+      security:
+        - ApiKeyAuth: []
+      responses:
+        '200':
+          description: All events deleted successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "All events deleted successfully."
+        '500':
+          description: Internal server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-KEY
+
+  schemas:
+    Schedule:
+      type: object
+      properties:
+        _id:
+          type: string
+          description: Unique ID of the schedule.
+          example: "schedule123"
+        name:
+          type: string
+          description: Human-readable name for the schedule.
+          example: "Daily Backup"
+        rrule:
+          type: string
+          description: Recurrence rule for the event (RFC 5545 format).
+          example: "FREQ=DAILY;INTERVAL=1"
+        callback_url:
+          type: string
+          description: The URL to call when the event is triggered.
+          example: "https://example.com/callback"
+        created_at:
+          type: string
+          format: date-time
+          description: Timestamp when the schedule was created.
+          example: "2024-12-18T10:00:00Z"
+
+    ScheduleCreateRequest:
+      type: object
+      required: [name, rrule, callback_url]
+      properties:
+        name:
+          type: string
+          example: "Daily Backup"
+        rrule:
+          type: string
+          example: "FREQ=DAILY;INTERVAL=1"
+        callback_url:
+          type: string
+          example: "https://example.com/callback"
+
+    Event:
+      type: object
+      properties:
+        _id:
+          type: string
+          description: Unique ID of the event.
+          example: "event456"
+        schedule_id:
+          type: string
+          description: ID of the related schedule.
+          example: "schedule123"
+        run_time:
+          type: string
+          format: date-time
+          description: Exact time the event should be executed.
+          example: "2024-12-18T12:00:00Z"
+        status:
+          type: array
+          description: Array of status entries for the event.
+          items:
+            $ref: '#/components/schemas/StatusEntry'
+        created_at:
+          type: string
+          format: date-time
+          description: Timestamp when the event was created.
+          example: "2024-12-18T10:00:00Z"
+
+    StatusEntry:
+      type: object
+      properties:
+        time:
+          type: string
+          format: date-time
+          description: Timestamp of the status update.
+          example: "2024-12-18T10:05:00Z"
+        status:
+          type: string
+          description: Status value of the event.
+          example: "ready_queue"
+        message:
+          type: string
+          description: Additional information about the status update.
+          example: "Event pre-queued for ready queue"
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: A descriptive error message.
+          example: "Invalid request body."
