@@ -1,38 +1,34 @@
 package main
 
 import (
-	"log"
+	"context"
 
-	"event-scheduler/api"
-	"event-scheduler/internal/config"
-	"event-scheduler/internal/database"
+	"event-scheduler/internal/api"
+	"event-scheduler/internal/helpers"
 
 	"github.com/gin-gonic/gin"
+	"github.com/rs/zerolog/log"
 )
 
 func main() {
-	// Load configuration
-	cfg := config.LoadConfig("config/config.yaml")
-
-	// Initialize MongoDB
-	mongoClient, err := database.NewMongoClient(cfg.Mongo.URI)
+	components, err := helpers.InitializeCommonComponents("dispatcher")
 	if err != nil {
-		log.Fatalf("Failed to connect to MongoDB: %v", err)
+		log.Fatal().Err(err)
 	}
-	defer mongoClient.Disconnect(nil)
+	defer components.CloseAll(context.Background())
 
-	db := mongoClient.Database(cfg.Mongo.Database)
+	cfg := components.Config
 
 	// Initialize Gin router
 	r := gin.Default()
 
 	// Register user and admin routes
-	api.RegisterRoutes(r, db, cfg.APIKeys.User)
-	api.RegisterAdminRoutes(r, db, cfg.APIKeys.Admin)
+	api.RegisterRoutes(r, components.MongoDatabase, cfg.APIKeys.User)
+	api.RegisterAdminRoutes(r, components.MongoDatabase, cfg.APIKeys.Admin)
 
 	// Start server
-	log.Println("API server started on port 8080")
+	log.Info().Msg("API server started on port 8080")
 	if err := r.Run(":8080"); err != nil {
-		log.Fatalf("Failed to start server: %v", err)
+		log.Fatal().Err(err).Msg("Failed to start server")
 	}
 }

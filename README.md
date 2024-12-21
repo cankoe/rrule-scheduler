@@ -52,6 +52,7 @@ The API is protected by API keys. By default:
 Use tools like `curl` or `Postman`:
 ```bash
 curl -H "X-API-KEY: user-api-key-123" -X POST -d '{"name":"Daily Backup","rrule":"FREQ=DAILY;INTERVAL=1","callback_url":"https://example.com/callback"}' http://localhost:8080/api/schedules
+```
 
 
 ### OpenAPI Specification

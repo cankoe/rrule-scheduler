@@ -2,12 +2,9 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"strconv"
 	"time"
 
-	"event-scheduler/internal/config"
-	"event-scheduler/internal/database"
 	"event-scheduler/internal/helpers"
 
 	"github.com/go-redis/redis/v8"
@@ -16,29 +13,20 @@ import (
 )
 
 func main() {
-	cfg := config.LoadConfig("config/config.yaml")
-
-	log.Info().Msg("Starting dispatcher service...")
-
-	mongoClient, err := database.NewMongoClient(cfg.Mongo.URI)
+	components, err := helpers.InitializeCommonComponents("dispatcher")
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to connect to MongoDB")
+		log.Fatal().Err(err)
 	}
-	defer mongoClient.Disconnect(context.Background())
-
-	eventsCollection := mongoClient.Database(cfg.Mongo.Database).Collection("events")
-
-	redisClient := redis.NewClient(&redis.Options{
-		Addr: fmt.Sprintf("%s:%d", cfg.Redis.Host, cfg.Redis.Port),
-	})
-	defer redisClient.Close()
+	defer components.CloseAll(context.Background())
 
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
+	eventsCollection := components.MongoDatabase.Collection("events")
+
 	log.Info().Msg("Dispatcher started.")
 	for range ticker.C {
-		dispatchDueEvents(redisClient, eventsCollection)
+		dispatchDueEvents(components.RedisClient, eventsCollection)
 	}
 }
 

@@ -5,8 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"event-scheduler/internal/config"
-	"event-scheduler/internal/database"
+	"event-scheduler/internal/helpers"
 	"event-scheduler/internal/models"
 
 	"github.com/go-redis/redis/v8"
@@ -18,18 +17,16 @@ import (
 )
 
 func main() {
-	cfg := config.LoadConfig("config/config.yaml")
-
-	log.Info().Msg("Starting prequeuer service...")
-
-	mongoClient, err := database.NewMongoClient(cfg.Mongo.URI)
+	components, err := helpers.InitializeCommonComponents("dispatcher")
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to connect to MongoDB")
+		log.Fatal().Err(err)
 	}
-	defer mongoClient.Disconnect(context.Background())
+	defer components.CloseAll(context.Background())
 
-	schedulesCollection := mongoClient.Database(cfg.Mongo.Database).Collection("schedules")
-	eventsCollection := mongoClient.Database(cfg.Mongo.Database).Collection("events")
+	cfg := components.Config
+
+	eventsCollection := components.MongoDatabase.Collection("events")
+	schedulesCollection := components.MongoDatabase.Collection("schedules")
 
 	redisClient := redis.NewClient(&redis.Options{
 		Addr: fmt.Sprintf("%s:%d", cfg.Redis.Host, cfg.Redis.Port),

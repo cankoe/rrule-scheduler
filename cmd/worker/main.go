@@ -6,8 +6,6 @@ import (
 	"net/http"
 	"time"
 
-	"event-scheduler/internal/config"
-	"event-scheduler/internal/database"
 	"event-scheduler/internal/helpers"
 	"event-scheduler/internal/models"
 
@@ -21,25 +19,14 @@ import (
 const maxRetries = 3 // Define a max retry threshold for the worker
 
 func main() {
-	cfg := config.LoadConfig("config/config.yaml")
-
-	log.Info().Msg("Starting worker service...")
-
-	// Initialize MongoDB
-	mongoClient, err := database.NewMongoClient(cfg.Mongo.URI)
+	components, err := helpers.InitializeCommonComponents("dispatcher")
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to connect to MongoDB")
+		log.Fatal().Err(err)
 	}
-	defer mongoClient.Disconnect(context.Background())
+	defer components.CloseAll(context.Background())
 
-	eventsCollection := mongoClient.Database(cfg.Mongo.Database).Collection("events")
-	schedulesCollection := mongoClient.Database(cfg.Mongo.Database).Collection("schedules")
-
-	// Initialize Redis
-	redisClient := redis.NewClient(&redis.Options{
-		Addr: fmt.Sprintf("%s:%d", cfg.Redis.Host, cfg.Redis.Port),
-	})
-	defer redisClient.Close()
+	eventsCollection := components.MongoDatabase.Collection("events")
+	schedulesCollection := components.MongoDatabase.Collection("schedules")
 
 	// Ensure MongoDB Indexes
 	if err := ensureIndexes(eventsCollection, schedulesCollection); err != nil {
@@ -49,7 +36,7 @@ func main() {
 	workerCount := 5
 	log.Info().Int("workers", workerCount).Msg("Spawning worker goroutines")
 	for i := 0; i < workerCount; i++ {
-		go eventWorker(redisClient, eventsCollection, schedulesCollection, i+1)
+		go eventWorker(components.RedisClient, eventsCollection, schedulesCollection, i+1)
 	}
 
 	select {}

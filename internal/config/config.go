@@ -1,131 +1,117 @@
 package config
 
 import (
-	"os"
-	"strconv"
+	"flag"
+	"fmt"
 
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-	"gopkg.in/yaml.v2"
+	"github.com/spf13/viper"
 )
 
 type Config struct {
 	Mongo struct {
-		URI      string `yaml:"uri"`
-		Database string `yaml:"database"`
-	} `yaml:"mongo"`
+		URI      string `mapstructure:"uri"`
+		Database string `mapstructure:"database"`
+	} `mapstructure:"mongo"`
 
 	Redis struct {
-		Host string `yaml:"host"`
-		Port int    `yaml:"port"`
-	} `yaml:"redis"`
+		Host string `mapstructure:"host"`
+		Port int    `mapstructure:"port"`
+	} `mapstructure:"redis"`
 
 	PreQueuer struct {
-		TickerIntervalSeconds int `yaml:"ticker_interval_seconds"`
-		EventTimeframeMinutes int `yaml:"event_timeframe_minutes"`
-	} `yaml:"prequeuer"`
+		TickerIntervalSeconds int `mapstructure:"ticker_interval_seconds"`
+		EventTimeframeMinutes int `mapstructure:"event_timeframe_minutes"`
+	} `mapstructure:"prequeuer"`
 
 	APIKeys struct {
-		User  string `yaml:"user"`
-		Admin string `yaml:"admin"`
-	} `yaml:"api_keys"`
+		User  string `mapstructure:"user"`
+		Admin string `mapstructure:"admin"`
+	} `mapstructure:"api_keys"`
 }
 
-func LoadConfig(path string) *Config {
-	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
+// LoadConfig loads the configuration from file, environment variables, and command-line arguments.
+// Order of precedence: defaults < config file < env vars < cmd flags.
+func LoadConfig(configPath string, args []string) (*Config, error) {
+	v := viper.New()
+
+	// Set defaults
+	v.SetDefault("mongo.uri", "mongodb://localhost:27017")
+	v.SetDefault("mongo.database", "scheduler")
+	v.SetDefault("redis.host", "localhost")
+	v.SetDefault("redis.port", 6379)
+	v.SetDefault("prequeuer.ticker_interval_seconds", 30)
+	v.SetDefault("prequeuer.event_timeframe_minutes", 60)
+
+	// Read from config file if present
+	v.SetConfigFile(configPath)
+	v.SetConfigType("yaml")
+	if err := v.ReadInConfig(); err != nil {
+		log.Warn().Err(err).Str("config_path", configPath).Msg("Failed to read config file, relying on defaults, env, and flags")
+	}
+
+	// Explicitly bind environment variables
+	bindEnvOrPanic(v, "mongo.uri", "MONGO_URI")
+	bindEnvOrPanic(v, "mongo.database", "MONGO_DATABASE")
+	bindEnvOrPanic(v, "redis.host", "REDIS_HOST")
+	bindEnvOrPanic(v, "redis.port", "REDIS_PORT")
+	bindEnvOrPanic(v, "prequeuer.ticker_interval_seconds", "PREQUEUER_TICKER_INTERVAL_SECONDS")
+	bindEnvOrPanic(v, "prequeuer.event_timeframe_minutes", "PREQUEUER_EVENT_TIMEFRAME_MINUTES")
+	bindEnvOrPanic(v, "api_keys.user", "API_KEYS_USER")
+	bindEnvOrPanic(v, "api_keys.admin", "API_KEYS_ADMIN")
+
+	// Parse command-line flags for prequeuer
+	preTicker := flag.Int("prequeuer-ticker-seconds", 0, "Override PreQueuer ticker interval in seconds")
+	preTimeframe := flag.Int("prequeuer-timeframe-minutes", 0, "Override PreQueuer event timeframe in minutes")
+	flag.CommandLine.Parse(args)
+
+	// Apply command-line flags if provided
+	if *preTicker > 0 {
+		v.Set("prequeuer.ticker_interval_seconds", *preTicker)
+	}
+	if *preTimeframe > 0 {
+		v.Set("prequeuer.event_timeframe_minutes", *preTimeframe)
+	}
+
 	cfg := &Config{}
-
-	data, err := os.ReadFile(path)
-	if err != nil {
-		log.Warn().Err(err).Str("config_path", path).Msg("Failed to read configuration file, will rely on defaults and environment variables")
-	} else {
-		if err := yaml.Unmarshal(data, cfg); err != nil {
-			log.Fatal().Err(err).Str("config_path", path).Msg("Failed to parse YAML configuration")
-		}
+	if err := v.Unmarshal(cfg); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
-	overrideWithEnv(cfg)
-	validateAndSetDefaults(cfg)
-	return cfg
+	if err := validateConfig(cfg); err != nil {
+		return nil, err
+	}
+
+	return cfg, nil
 }
 
-func overrideWithEnv(cfg *Config) {
-	// MongoDB
-	if val := os.Getenv("MONGO_URI"); val != "" {
-		cfg.Mongo.URI = val
-	}
-	if val := os.Getenv("MONGO_DATABASE"); val != "" {
-		cfg.Mongo.Database = val
-	}
-
-	// Redis
-	if val := os.Getenv("REDIS_HOST"); val != "" {
-		cfg.Redis.Host = val
-	}
-	if val := os.Getenv("REDIS_PORT"); val != "" {
-		if port, err := strconv.Atoi(val); err == nil {
-			cfg.Redis.Port = port
-		}
-	}
-
-	// PreQueuer
-	if val := os.Getenv("PREQUEUER_TICKER_INTERVAL_SECONDS"); val != "" {
-		if interval, err := strconv.Atoi(val); err == nil {
-			cfg.PreQueuer.TickerIntervalSeconds = interval
-		}
-	}
-	if val := os.Getenv("PREQUEUER_EVENT_TIMEFRAME_MINUTES"); val != "" {
-		if timeframe, err := strconv.Atoi(val); err == nil {
-			cfg.PreQueuer.EventTimeframeMinutes = timeframe
-		}
-	}
-
-	// API Keys
-	if val := os.Getenv("API_KEYS_USER"); val != "" {
-		cfg.APIKeys.User = val
-	}
-	if val := os.Getenv("API_KEYS_ADMIN"); val != "" {
-		cfg.APIKeys.Admin = val
+func bindEnvOrPanic(v *viper.Viper, key, env string) {
+	if err := v.BindEnv(key, env); err != nil {
+		log.Fatal().Err(err).Msgf("Failed to bind environment variable %s to key %s", env, key)
 	}
 }
 
-func validateAndSetDefaults(cfg *Config) {
-	// Validate MongoDB URI
+func validateConfig(cfg *Config) error {
 	if cfg.Mongo.URI == "" {
-		log.Warn().Msg("MONGO_URI not provided, defaulting to mongodb://localhost:27017")
-		cfg.Mongo.URI = "mongodb://localhost:27017"
+		log.Warn().Msg("MONGO_URI not provided, using default")
 	}
-
 	if cfg.Mongo.Database == "" {
-		log.Warn().Msg("MONGO_DATABASE not provided, defaulting to 'scheduler'")
-		cfg.Mongo.Database = "scheduler"
+		log.Warn().Msg("MONGO_DATABASE not provided, using default")
 	}
-
-	// Validate Redis
-	if cfg.Redis.Host == "" {
-		log.Warn().Msg("REDIS_HOST not provided, defaulting to 'localhost'")
-		cfg.Redis.Host = "localhost"
-	}
-	if cfg.Redis.Port == 0 {
-		log.Warn().Msg("REDIS_PORT not provided, defaulting to 6379")
-		cfg.Redis.Port = 6379
-	}
-
-	// PreQueuer defaults
-	if cfg.PreQueuer.TickerIntervalSeconds == 0 {
-		log.Info().Msg("TickerIntervalSeconds not set, defaulting to 30")
-		cfg.PreQueuer.TickerIntervalSeconds = 30
-	}
-	if cfg.PreQueuer.EventTimeframeMinutes == 0 {
-		log.Info().Msg("EventTimeframeMinutes not set, defaulting to 60")
-		cfg.PreQueuer.EventTimeframeMinutes = 60
-	}
-
-	// API Keys checks (optional)
 	if cfg.APIKeys.User == "" {
 		log.Warn().Msg("No user API key provided, user API routes will be unprotected")
 	}
 	if cfg.APIKeys.Admin == "" {
 		log.Warn().Msg("No admin API key provided, admin routes will be unprotected")
 	}
+
+	// Validate PreQueuer settings
+	if cfg.PreQueuer.TickerIntervalSeconds <= 0 {
+		return fmt.Errorf("PreQueuer ticker_interval_seconds must be > 0, got %d", cfg.PreQueuer.TickerIntervalSeconds)
+	}
+	if cfg.PreQueuer.EventTimeframeMinutes <= 0 {
+		return fmt.Errorf("PreQueuer event_timeframe_minutes must be > 0, got %d", cfg.PreQueuer.EventTimeframeMinutes)
+	}
+
+	return nil
 }

@@ -7,8 +7,8 @@ redis:
   port: 6379
 
 prequeuer:
-  ticker_interval_seconds: 20   # How often the Pre-Queuer runs (in seconds)
-  event_timeframe_minutes: 10   # How many minutes into the future to generate events
+  ticker_interval_seconds: 20
+  event_timeframe_minutes: 10
 
 api_keys:
   user: "user-api-key-123"

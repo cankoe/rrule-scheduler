@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog/log"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -36,16 +37,29 @@ func createScheduleHandler(schedulesCollection *mongo.Collection) gin.HandlerFun
 			return
 		}
 
+		// Clear out any pre-existing ID, let MongoDB generate a new one
 		schedule.ID = ""
+
 		ctx := context.TODO()
-		_, err := schedulesCollection.InsertOne(ctx, schedule)
+		res, err := schedulesCollection.InsertOne(ctx, schedule)
 		if err != nil {
 			log.Error().Err(err).Str("route", "POST /api/schedules").Msg("Failed to create schedule in database")
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create schedule. Please try again later."})
 			return
 		}
+
+		insertedID := res.InsertedID // This should be a primitive.ObjectID
 		log.Info().Str("route", "POST /api/schedules").Str("schedule_name", schedule.Name).Msg("Schedule created successfully")
-		c.JSON(http.StatusCreated, gin.H{"message": "Schedule created successfully."})
+
+		// Convert ObjectID to hex string if needed
+		objectID, ok := insertedID.(primitive.ObjectID)
+		if !ok {
+			log.Warn().Str("route", "POST /api/schedules").Msg("InsertedID is not an ObjectID")
+			c.JSON(http.StatusCreated, gin.H{"id": insertedID})
+			return
+		}
+
+		c.JSON(http.StatusCreated, gin.H{"id": objectID.Hex()})
 	}
 }
 
