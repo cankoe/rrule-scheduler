@@ -16,8 +16,6 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
-const maxRetries = 3 // Define a max retry threshold for the worker
-
 func main() {
 	components, err := helpers.InitializeCommonComponents("dispatcher")
 	if err != nil {
@@ -26,6 +24,7 @@ func main() {
 	defer components.CloseAll(context.Background())
 
 	eventsCollection := components.MongoDatabase.Collection("events")
+	archivedEventsCollection := components.MongoDatabase.Collection("archived_events")
 	schedulesCollection := components.MongoDatabase.Collection("schedules")
 
 	// Ensure MongoDB Indexes
@@ -36,7 +35,7 @@ func main() {
 	workerCount := 5
 	log.Info().Int("workers", workerCount).Msg("Spawning worker goroutines")
 	for i := 0; i < workerCount; i++ {
-		go eventWorker(components.RedisClient, eventsCollection, schedulesCollection, i+1)
+		go eventWorker(components.RedisClient, eventsCollection, archivedEventsCollection, schedulesCollection, i+1, components.Config.Worker.MaxRetries)
 	}
 
 	select {}
@@ -65,7 +64,7 @@ func ensureIndexes(eventsCollection, schedulesCollection *mongo.Collection) erro
 	return nil
 }
 
-func eventWorker(redisClient *redis.Client, eventsCollection, schedulesCollection *mongo.Collection, workerID int) {
+func eventWorker(redisClient *redis.Client, eventsCollection, archivedEventsCollection, schedulesCollection *mongo.Collection, workerID int, maxRetries int) {
 	for {
 		ctx := context.Background()
 
@@ -91,7 +90,7 @@ func eventWorker(redisClient *redis.Client, eventsCollection, schedulesCollectio
 		err = eventsCollection.FindOne(ctx, bson.M{"_id": objectID}).Decode(&event)
 		if err != nil {
 			log.Error().Err(err).Int("worker_id", workerID).Str("event_id", eventID).Msg("Failed to retrieve event")
-			recordErrorStatus(ctx, eventsCollection, eventID, "Failed to retrieve event: "+err.Error())
+			recordErrorStatus(ctx, eventsCollection, archivedEventsCollection, eventID, "Failed to retrieve event: "+err.Error())
 			continue
 		}
 
@@ -103,14 +102,14 @@ func eventWorker(redisClient *redis.Client, eventsCollection, schedulesCollectio
 		scheduleObjectID, err := primitive.ObjectIDFromHex(event.ScheduleID)
 		if err != nil {
 			log.Error().Err(err).Int("worker_id", workerID).Str("schedule_id", event.ScheduleID).Msg("Invalid schedule ObjectID format")
-			recordErrorStatus(ctx, eventsCollection, eventID, "Invalid schedule ObjectID: "+err.Error())
+			recordErrorStatus(ctx, eventsCollection, archivedEventsCollection, eventID, "Invalid schedule ObjectID: "+err.Error())
 			continue
 		}
 
 		err = schedulesCollection.FindOne(ctx, bson.M{"_id": scheduleObjectID}).Decode(&schedule)
 		if err != nil {
 			log.Error().Err(err).Int("worker_id", workerID).Str("event_id", eventID).Msg("Failed to retrieve schedule")
-			recordErrorStatus(ctx, eventsCollection, eventID, "Failed to retrieve schedule: "+err.Error())
+			recordErrorStatus(ctx, eventsCollection, archivedEventsCollection, eventID, "Failed to retrieve schedule: "+err.Error())
 			continue
 		}
 
@@ -122,10 +121,10 @@ func eventWorker(redisClient *redis.Client, eventsCollection, schedulesCollectio
 				resp.Body.Close()
 				// Mark the event as completed
 				log.Info().Int("worker_id", workerID).Str("event_id", eventID).Msg("Marking event as completed")
-				err = helpers.UpdateEventStatus(ctx, eventsCollection, eventID, "completed", "Event successfully processed")
+				err = helpers.UpdateAndArchiveEvent(ctx, eventsCollection, archivedEventsCollection, eventID, "completed", "Event successfully processed")
 				if err != nil {
 					log.Error().Err(err).Int("worker_id", workerID).Str("event_id", eventID).Msg("Failed to mark event as completed")
-					recordErrorStatus(ctx, eventsCollection, eventID, "Failed to update status to completed: "+err.Error())
+					recordErrorStatus(ctx, eventsCollection, archivedEventsCollection, eventID, "Failed to update status to completed: "+err.Error())
 				}
 				finalErr = nil
 				break
@@ -140,13 +139,13 @@ func eventWorker(redisClient *redis.Client, eventsCollection, schedulesCollectio
 
 		if finalErr != nil {
 			log.Error().Err(finalErr).Int("worker_id", workerID).Str("event_id", eventID).Msg("Failed to call callback URL after max retries")
-			recordErrorStatus(ctx, eventsCollection, eventID, "Callback failed after max retries: "+finalErr.Error())
+			recordErrorStatus(ctx, eventsCollection, archivedEventsCollection, eventID, "Callback failed after max retries: "+finalErr.Error())
 		}
 	}
 }
 
-func recordErrorStatus(ctx context.Context, eventsCollection *mongo.Collection, eventID, errorMsg string) {
-	err := helpers.UpdateEventStatus(ctx, eventsCollection, eventID, "error", errorMsg)
+func recordErrorStatus(ctx context.Context, eventsCollection, archivedEventsCollection *mongo.Collection, eventID, errorMsg string) {
+	err := helpers.UpdateAndArchiveEvent(ctx, eventsCollection, archivedEventsCollection, eventID, "error", errorMsg)
 	if err != nil {
 		log.Error().Err(err).Str("event_id", eventID).Msg("Failed to record error status")
 	}

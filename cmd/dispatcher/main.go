@@ -23,14 +23,15 @@ func main() {
 	defer ticker.Stop()
 
 	eventsCollection := components.MongoDatabase.Collection("events")
+	archivedEventsCollection := components.MongoDatabase.Collection("archived_events")
 
 	log.Info().Msg("Dispatcher started.")
 	for range ticker.C {
-		dispatchDueEvents(components.RedisClient, eventsCollection)
+		dispatchDueEvents(components.RedisClient, eventsCollection, archivedEventsCollection)
 	}
 }
 
-func dispatchDueEvents(redisClient *redis.Client, eventsCollection *mongo.Collection) {
+func dispatchDueEvents(redisClient *redis.Client, eventsCollection, archivedEventsCollection *mongo.Collection) {
 	ctx := context.Background()
 	now := time.Now().UTC().Add(-400 * time.Millisecond).Unix() // sub 400ms for slight trigger delay
 
@@ -54,7 +55,7 @@ func dispatchDueEvents(redisClient *redis.Client, eventsCollection *mongo.Collec
 		removedCount, err := redisClient.ZRem(ctx, "ready_queue", eventID).Result()
 		if err != nil {
 			log.Error().Err(err).Str("event_id", eventID).Msg("Failed to remove event from ready_queue")
-			recordErrorStatus(ctx, eventsCollection, eventID, "Failed to remove from ready_queue: "+err.Error())
+			recordErrorStatus(ctx, eventsCollection, archivedEventsCollection, eventID, "Failed to remove from ready_queue: "+err.Error())
 			continue
 		}
 
@@ -64,17 +65,17 @@ func dispatchDueEvents(redisClient *redis.Client, eventsCollection *mongo.Collec
 			continue
 		}
 
-		// Update event status to worker_queue
+		// Update event status in mongodb
 		if err := helpers.UpdateEventStatus(ctx, eventsCollection, eventID, "worker_queue", "Event dispatched to worker queue"); err != nil {
 			log.Error().Err(err).Str("event_id", eventID).Msg("Failed to update event status to worker_queue")
-			recordErrorStatus(ctx, eventsCollection, eventID, "Failed to update status to worker_queue: "+err.Error())
+			recordErrorStatus(ctx, eventsCollection, archivedEventsCollection, eventID, "Failed to update status to worker_queue: "+err.Error())
 			continue
 		}
 
 		// Push the event to the worker_queue
 		if err := redisClient.LPush(ctx, "worker_queue", eventID).Err(); err != nil {
 			log.Error().Err(err).Str("event_id", eventID).Msg("Failed to push event to worker_queue")
-			recordErrorStatus(ctx, eventsCollection, eventID, "Failed to push to worker_queue: "+err.Error())
+			recordErrorStatus(ctx, eventsCollection, archivedEventsCollection, eventID, "Failed to push to worker_queue: "+err.Error())
 			continue
 		}
 
@@ -82,8 +83,8 @@ func dispatchDueEvents(redisClient *redis.Client, eventsCollection *mongo.Collec
 	}
 }
 
-func recordErrorStatus(ctx context.Context, eventsCollection *mongo.Collection, eventID, errorMsg string) {
-	err := helpers.UpdateEventStatus(ctx, eventsCollection, eventID, "error", errorMsg)
+func recordErrorStatus(ctx context.Context, eventsCollection, archivedEventsCollection *mongo.Collection, eventID, errorMsg string) {
+	err := helpers.UpdateAndArchiveEvent(ctx, eventsCollection, archivedEventsCollection, eventID, "error", errorMsg)
 	if err != nil {
 		log.Error().Err(err).Str("event_id", eventID).Msg("Failed to record error status")
 	}

@@ -24,6 +24,10 @@ type Config struct {
 		EventTimeframeMinutes int `mapstructure:"event_timeframe_minutes"`
 	} `mapstructure:"prequeuer"`
 
+	Worker struct {
+		MaxRetries int `mapstructure:"max_retries"`
+	}
+
 	APIKeys struct {
 		User  string `mapstructure:"user"`
 		Admin string `mapstructure:"admin"`
@@ -42,6 +46,7 @@ func LoadConfig(configPath string, args []string) (*Config, error) {
 	v.SetDefault("redis.port", 6379)
 	v.SetDefault("prequeuer.ticker_interval_seconds", 30)
 	v.SetDefault("prequeuer.event_timeframe_minutes", 60)
+	v.SetDefault("worker.max_retries", 3)
 
 	// Read from config file if present
 	v.SetConfigFile(configPath)
@@ -57,12 +62,14 @@ func LoadConfig(configPath string, args []string) (*Config, error) {
 	bindEnvOrPanic(v, "redis.port", "REDIS_PORT")
 	bindEnvOrPanic(v, "prequeuer.ticker_interval_seconds", "PREQUEUER_TICKER_INTERVAL_SECONDS")
 	bindEnvOrPanic(v, "prequeuer.event_timeframe_minutes", "PREQUEUER_EVENT_TIMEFRAME_MINUTES")
+	bindEnvOrPanic(v, "worker.max_retries", "WORKER_MAX_RETRIES")
 	bindEnvOrPanic(v, "api_keys.user", "API_KEYS_USER")
 	bindEnvOrPanic(v, "api_keys.admin", "API_KEYS_ADMIN")
 
 	// Parse command-line flags for prequeuer
 	preTicker := flag.Int("prequeuer-ticker-seconds", 0, "Override PreQueuer ticker interval in seconds")
 	preTimeframe := flag.Int("prequeuer-timeframe-minutes", 0, "Override PreQueuer event timeframe in minutes")
+	workerMaxRetries := flag.Int("max-retries", 0, "Override Worker max retries")
 	flag.CommandLine.Parse(args)
 
 	// Apply command-line flags if provided
@@ -71,6 +78,9 @@ func LoadConfig(configPath string, args []string) (*Config, error) {
 	}
 	if *preTimeframe > 0 {
 		v.Set("prequeuer.event_timeframe_minutes", *preTimeframe)
+	}
+	if *workerMaxRetries > 0 {
+		v.Set("worker.max_retries", *workerMaxRetries)
 	}
 
 	cfg := &Config{}
@@ -111,6 +121,11 @@ func validateConfig(cfg *Config) error {
 	}
 	if cfg.PreQueuer.EventTimeframeMinutes <= 0 {
 		return fmt.Errorf("PreQueuer event_timeframe_minutes must be > 0, got %d", cfg.PreQueuer.EventTimeframeMinutes)
+	}
+
+	// Validate Worker settings
+	if cfg.Worker.MaxRetries <= 0 {
+		return fmt.Errorf("worker max_retries must be > 0, got %d", cfg.Worker.MaxRetries)
 	}
 
 	return nil

@@ -15,7 +15,7 @@ tags:
   - name: Schedules
     description: Endpoints for managing schedules (user level)
   - name: Events
-    description: Endpoints for retrieving event history (user level)
+    description: Endpoints for retrieving events (user level)
   - name: Admin
     description: Administrative endpoints for managing schedules and events
 
@@ -41,9 +41,10 @@ paths:
               schema:
                 type: object
                 properties:
-                  message:
+                  id:
                     type: string
-                    example: "Schedule created successfully."
+                    description: The unique ID of the created schedule.
+                    example: "schedule123"
         '400':
           description: Invalid request body.
           content:
@@ -57,130 +58,50 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
-  /api/schedules/{id}:
-    put:
-      summary: Update an existing schedule
-      description: Update fields of an existing schedule by its ID.
-      tags: [Schedules]
-      security:
-        - ApiKeyAuth: []
-      parameters:
-        - in: path
-          name: id
-          description: The ID of the schedule to update
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              description: A partial update to the schedule (e.g. RRule, CallbackURL)
-              additionalProperties: true
-      responses:
-        '200':
-          description: Schedule updated successfully.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                    example: "Schedule updated successfully."
-        '400':
-          description: Bad request (missing ID or invalid body).
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '404':
-          description: Schedule not found.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '500':
-          description: Internal server error.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
-    delete:
-      summary: Delete a schedule and its associated events
-      description: Delete the specified schedule and all events tied to it.
-      tags: [Schedules]
-      security:
-        - ApiKeyAuth: []
-      parameters:
-        - in: path
-          name: id
-          description: The ID of the schedule to delete
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Schedule and associated events deleted successfully.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                    example: "Schedule and associated events deleted successfully."
-        '400':
-          description: Missing schedule ID.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '404':
-          description: Schedule not found.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '500':
-          description: Internal server error.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
-  /api/schedules/{id}/events:
+  /api/schedules/{id}/events/pending:
     get:
-      summary: Get event history for a schedule
-      description: Retrieve all events generated for a given schedule ID.
+      summary: Get pending events for a schedule
+      description: Retrieve all pending events for a given schedule ID with pagination.
       tags: [Events]
       security:
         - ApiKeyAuth: []
       parameters:
         - in: path
           name: id
-          description: The ID of the schedule for which to retrieve events
+          description: The ID of the schedule for which to retrieve pending events.
           required: true
           schema:
             type: string
+        - in: query
+          name: page
+          description: The page number for pagination.
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          description: The number of items per page.
+          schema:
+            type: integer
+            default: 10
       responses:
         '200':
-          description: Events retrieved successfully or no events found.
+          description: Pending events retrieved successfully.
           content:
             application/json:
               schema:
-                oneOf:
-                  - type: object
-                    properties:
-                      message:
-                        type: string
-                        example: "No events found for the given schedule."
-                  - type: array
+                type: object
+                properties:
+                  events:
+                    type: array
                     items:
                       $ref: '#/components/schemas/Event'
+                  page:
+                    type: integer
+                    example: 1
+                  limit:
+                    type: integer
+                    example: 10
         '400':
           description: Missing schedule ID.
           content:
@@ -194,105 +115,56 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
-  /admin/schedules:
+  /api/schedules/{id}/events/history:
     get:
-      summary: Get all schedules
-      description: Retrieve all existing schedules (admin only).
-      tags: [Admin]
+      summary: Get archived events for a schedule
+      description: Retrieve all archived events for a given schedule ID with pagination.
+      tags: [Events]
       security:
         - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: id
+          description: The ID of the schedule for which to retrieve archived events.
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: page
+          description: The page number for pagination.
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          description: The number of items per page.
+          schema:
+            type: integer
+            default: 10
       responses:
         '200':
-          description: A list of schedules or a message if none are found.
-          content:
-            application/json:
-              schema:
-                oneOf:
-                  - type: array
-                    items:
-                      $ref: '#/components/schemas/Schedule'
-                  - type: object
-                    properties:
-                      message:
-                        type: string
-                        example: "No schedules found."
-        '500':
-          description: Internal server error.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
-    delete:
-      summary: Delete all schedules and events
-      description: Removes all schedules and their associated events from the system (admin only).
-      tags: [Admin]
-      security:
-        - ApiKeyAuth: []
-      responses:
-        '200':
-          description: All schedules and events deleted successfully.
+          description: Archived events retrieved successfully.
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  message:
-                    type: string
-                    example: "All schedules and events deleted successfully."
-        '500':
-          description: Internal server error.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
-  /admin/events:
-    get:
-      summary: Get all events
-      description: Retrieve all events in the system (admin only).
-      tags: [Admin]
-      security:
-        - ApiKeyAuth: []
-      responses:
-        '200':
-          description: A list of events or a message if none are found.
-          content:
-            application/json:
-              schema:
-                oneOf:
-                  - type: array
+                  events:
+                    type: array
                     items:
                       $ref: '#/components/schemas/Event'
-                  - type: object
-                    properties:
-                      message:
-                        type: string
-                        example: "No events found."
-        '500':
-          description: Internal server error.
+                  page:
+                    type: integer
+                    example: 1
+                  limit:
+                    type: integer
+                    example: 10
+        '400':
+          description: Missing schedule ID.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-
-    delete:
-      summary: Delete all events
-      description: Removes all events from the system (admin only).
-      tags: [Admin]
-      security:
-        - ApiKeyAuth: []
-      responses:
-        '200':
-          description: All events deleted successfully.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                    example: "All events deleted successfully."
         '500':
           description: Internal server error.
           content:

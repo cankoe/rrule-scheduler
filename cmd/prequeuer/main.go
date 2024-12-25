@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"event-scheduler/internal/helpers"
@@ -28,11 +27,6 @@ func main() {
 	eventsCollection := components.MongoDatabase.Collection("events")
 	schedulesCollection := components.MongoDatabase.Collection("schedules")
 
-	redisClient := redis.NewClient(&redis.Options{
-		Addr: fmt.Sprintf("%s:%d", cfg.Redis.Host, cfg.Redis.Port),
-	})
-	defer redisClient.Close()
-
 	tickerInterval := time.Duration(cfg.PreQueuer.TickerIntervalSeconds) * time.Second
 	eventTimeframe := time.Duration(cfg.PreQueuer.EventTimeframeMinutes) * time.Minute
 
@@ -41,7 +35,7 @@ func main() {
 
 	log.Info().Msg("Prequeuer started. Generating events...")
 	for range ticker.C {
-		generateEvents(schedulesCollection, eventsCollection, redisClient, eventTimeframe)
+		generateEvents(schedulesCollection, eventsCollection, components.RedisClient, eventTimeframe)
 	}
 }
 
