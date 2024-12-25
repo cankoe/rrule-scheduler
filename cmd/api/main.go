@@ -24,7 +24,6 @@ func main() {
 
 	// Register user and admin routes
 	api.RegisterRoutes(r, components.MongoDatabase, cfg.APIKeys.User)
-	api.RegisterAdminRoutes(r, components.MongoDatabase, cfg.APIKeys.Admin)
 
 	// Start server
 	log.Info().Msg("API server started on port 8080")
