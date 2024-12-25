@@ -1,0 +1,42 @@
+# Ignore .vscode settings
+.vscode/
+
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Output of the Go compiler
+*.test
+*.out
+
+# Build directory
+/build/
+bin/
+dist/
+
+# Dependency directories (often used in vendoring)
+vendor/
+
+# Logs and temporary files
+*.log
+*.tmp
+*.swp
+*.swo
+
+# Docker files
+docker-compose.override.yml
+.env
+
+# IDE files
+.idea/
+*.iml
+
+# macOS files
+.DS_Store
+
+# Coverage files
+*.cover
+coverage.out
