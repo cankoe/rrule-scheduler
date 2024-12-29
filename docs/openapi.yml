@@ -4,7 +4,6 @@ info:
   version: 1.0.0
   description: |
     The Event Scheduler API allows clients to manage recurring schedules and their events.
-    It provides both user-level and admin-level endpoints.
 servers:
   - url: http://localhost:8080
     description: Local development server
@@ -16,8 +15,6 @@ tags:
     description: Endpoints for managing schedules (user level)
   - name: Events
     description: Endpoints for retrieving events (user level)
-  - name: Admin
-    description: Administrative endpoints for managing schedules and events
 
 paths:
   /api/schedules:
@@ -47,6 +44,109 @@ paths:
                     example: "schedule123"
         '400':
           description: Invalid request body.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/schedules/{id}:
+    put:
+      summary: Update an existing schedule
+      description: Update the details of a specific schedule.
+      tags: [Schedules]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: id
+          description: The ID of the schedule to update.
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Fields to update in the schedule.
+              properties:
+                name:
+                  type: string
+                  example: "Updated Backup"
+                rrule:
+                  type: string
+                  example: "FREQ=WEEKLY;INTERVAL=1"
+                callback_url:
+                  type: string
+                  example: "https://example.com/updated-callback"
+      responses:
+        '200':
+          description: Schedule updated successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Schedule updated successfully."
+        '400':
+          description: Invalid request body or missing schedule ID.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Schedule not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      summary: Delete a schedule and its events
+      description: Delete a schedule and all events associated with it.
+      tags: [Schedules]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: id
+          description: The ID of the schedule to delete.
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Schedule and events deleted successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Schedule and associated events deleted successfully."
+        '400':
+          description: Missing or invalid schedule ID.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Schedule not found.
           content:
             application/json:
               schema:

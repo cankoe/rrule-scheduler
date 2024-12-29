@@ -33,7 +33,7 @@ func main() {
 
 func dispatchDueEvents(redisClient *redis.Client, eventsCollection, archivedEventsCollection *mongo.Collection) {
 	ctx := context.Background()
-	now := time.Now().UTC().Add(-400 * time.Millisecond).Unix() // sub 400ms for slight trigger delay
+	now := time.Now().UTC().Unix()
 
 	eventIDs, err := redisClient.ZRangeByScore(ctx, "ready_queue", &redis.ZRangeBy{
 		Min: "-inf",

@@ -31,6 +31,12 @@ COPY --from=builder /bin/prequeuer ./prequeuer
 COPY --from=builder /bin/dispatcher ./dispatcher
 COPY --from=builder /bin/worker ./worker
 
+# Copy Swagger UI files
+COPY ./swagger-ui ./swagger-ui
+
+# Copy OpenAPI YAML file
+COPY ./docs/openapi.yml ./docs/openapi.yml
+
 # Add a non-root user for security
 RUN addgroup --system app && adduser --system --ingroup app app && chown -R app:app /app
 USER app

@@ -1,13 +1,12 @@
 # Event Scheduler
 
-Event Scheduler is a service that allows you to create recurring schedules using RRULEs and trigger callbacks at the specified times. It includes components to manage schedules, generate events in advance, dispatch them at the correct times, and a worker to execute callbacks.
+Event Scheduler is a service that allows you to create recurring schedules using RRULEs and trigger callbacks at the specified times. It includes components to manage schedules, pre-queue events, dispatch them to a worker queue, and a worker to execute callbacks from the worker_queue.
 
 ## Features
 
 - **Create and manage schedules**: Define recurring events using RRULE strings.
-- **Admin and user APIs**: Role-based access to administrative and user endpoints.
 - **Pre-queuing events**: Generate future events within a specific timeframe.
-- **Dispatcher service**: Moves due events from a sorted queue into a worker queue.
+- **Dispatcher service**: Moves due events into a worker queue.
 - **Worker service**: Executes the callback URLs for triggered events, with retries.
 
 ## Components
@@ -30,7 +29,7 @@ Event Scheduler is a service that allows you to create recurring schedules using
 ## Getting Started
 
 ### Prerequisites
-- Go 1.20+
+- Go 1.23.2+
 - Docker & Docker Compose
 - MongoDB & Redis if running locally without Docker
 
@@ -42,11 +41,6 @@ Event Scheduler is a service that allows you to create recurring schedules using
 
 ### Configuration
 Configuration is loaded from `config/config.yaml` and can be overridden by environment variables. See `internal/config/config.go` for environment variable overrides.
-
-### Authentication
-The API is protected by API keys. By default:
-- User API key: `user-api-key-123` (passed via `X-API-KEY` header)
-- Admin API key: `admin-api-key-456` (passed via `X-API-KEY` header)
 
 ### Testing API Endpoints
 Use tools like `curl` or `Postman`:

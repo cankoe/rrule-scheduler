@@ -9,7 +9,3 @@ redis:
 prequeuer:
   ticker_interval_seconds: 20
   event_timeframe_minutes: 10
-
-api_keys:
-  user: "user-api-key-123"
-  admin: "admin-api-key-456"

@@ -27,11 +27,6 @@ type Config struct {
 	Worker struct {
 		MaxRetries int `mapstructure:"max_retries"`
 	}
-
-	APIKeys struct {
-		User  string `mapstructure:"user"`
-		Admin string `mapstructure:"admin"`
-	} `mapstructure:"api_keys"`
 }
 
 // LoadConfig loads the configuration from file, environment variables, and command-line arguments.
@@ -63,8 +58,6 @@ func LoadConfig(configPath string, args []string) (*Config, error) {
 	bindEnvOrPanic(v, "prequeuer.ticker_interval_seconds", "PREQUEUER_TICKER_INTERVAL_SECONDS")
 	bindEnvOrPanic(v, "prequeuer.event_timeframe_minutes", "PREQUEUER_EVENT_TIMEFRAME_MINUTES")
 	bindEnvOrPanic(v, "worker.max_retries", "WORKER_MAX_RETRIES")
-	bindEnvOrPanic(v, "api_keys.user", "API_KEYS_USER")
-	bindEnvOrPanic(v, "api_keys.admin", "API_KEYS_ADMIN")
 
 	// Parse command-line flags for prequeuer
 	preTicker := flag.Int("prequeuer-ticker-seconds", 0, "Override PreQueuer ticker interval in seconds")
@@ -107,12 +100,6 @@ func validateConfig(cfg *Config) error {
 	}
 	if cfg.Mongo.Database == "" {
 		log.Warn().Msg("MONGO_DATABASE not provided, using default")
-	}
-	if cfg.APIKeys.User == "" {
-		log.Warn().Msg("No user API key provided, user API routes will be unprotected")
-	}
-	if cfg.APIKeys.Admin == "" {
-		log.Warn().Msg("No admin API key provided, admin routes will be unprotected")
 	}
 
 	// Validate PreQueuer settings

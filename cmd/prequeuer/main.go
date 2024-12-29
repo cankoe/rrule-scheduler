@@ -16,7 +16,7 @@ import (
 )
 
 func main() {
-	components, err := helpers.InitializeCommonComponents("dispatcher")
+	components, err := helpers.InitializeCommonComponents("prequeuer")
 	if err != nil {
 		log.Fatal().Err(err)
 	}

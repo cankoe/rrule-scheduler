@@ -11,7 +11,7 @@ import (
 )
 
 func main() {
-	components, err := helpers.InitializeCommonComponents("dispatcher")
+	components, err := helpers.InitializeCommonComponents("api")
 	if err != nil {
 		log.Fatal().Err(err)
 	}
@@ -22,7 +22,7 @@ func main() {
 	// Initialize Gin router
 	r := gin.Default()
 
-	// Register user and admin routes
+	// Register user routes
 	api.RegisterRoutes(r, components.MongoDatabase, cfg.APIKeys.User)
 
 	// Start server

@@ -23,6 +23,12 @@ func RegisterRoutes(r *gin.Engine, db *mongo.Database, userAPIKey string) {
 	eventsCollection := db.Collection("events")
 	archivedEventsCollection := db.Collection("archived_events")
 
+	// Serve Swagger UI static files
+	r.Static("/swagger-ui", "./swagger-ui")
+
+	// Serve the OpenAPI YAML file
+	r.StaticFile("/docs/openapi.yml", "./docs/openapi.yml")
+
 	userGroup := r.Group("/api")
 	{
 		userGroup.POST("/schedules", createScheduleHandler(schedulesCollection))
@@ -193,12 +199,6 @@ func getEventsHandler(collection *mongo.Collection) gin.HandlerFunc {
 		if err := cursor.All(ctx, &events); err != nil {
 			log.Error().Err(err).Str("schedule_id", id).Msg("Failed to parse events")
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse events."})
-			return
-		}
-
-		if len(events) == 0 {
-			log.Info().Str("schedule_id", id).Msg("No events found")
-			c.JSON(http.StatusOK, gin.H{"message": "No events found."})
 			return
 		}
 

@@ -43,8 +43,6 @@ services:
       MONGO_DATABASE: "event_scheduler"
       REDIS_HOST: "redis"
       REDIS_PORT: "6379"
-      API_KEYS_USER: "user-api-key-123"
-      API_KEYS_ADMIN: "admin-api-key-456"
     depends_on:
       mongodb:
         condition: service_healthy

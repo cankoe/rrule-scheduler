@@ -17,7 +17,7 @@ import (
 )
 
 func main() {
-	components, err := helpers.InitializeCommonComponents("dispatcher")
+	components, err := helpers.InitializeCommonComponents("worker")
 	if err != nil {
 		log.Fatal().Err(err)
 	}
@@ -71,7 +71,7 @@ func eventWorker(redisClient *redis.Client, eventsCollection, archivedEventsColl
 		eventID, err := redisClient.RPop(ctx, "worker_queue").Result()
 		if err != nil {
 			if err == redis.Nil {
-				log.Warn().Int("worker_id", workerID).Msg("No events in queue, retrying...")
+				log.Debug().Int("worker_id", workerID).Msg("No events in queue, retrying...")
 				time.Sleep(1 * time.Second)
 			} else {
 				log.Error().Err(err).Int("worker_id", workerID).Msg("Failed to fetch event from worker_queue")
