@@ -1,6 +1,10 @@
 # RRule Scheduler
 
+<img src="docs/_media/logo.png" alt="RRule Scheduler Logo" width="200" margin="20" align="right">
+
 A **distributed event scheduling** system built with Go, MongoDB, and Redis. This project automates the creation, dispatching, and execution of scheduled events based on RRULE definitions.
+
+<br clear="both"/>
 
 ## Table of Contents
 - [RRule Scheduler](#rrule-scheduler)
