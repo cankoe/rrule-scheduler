@@ -2,7 +2,7 @@ package prequeuer
 
 import (
 	"context"
-	"event-scheduler/internal/models"
+	"rrule-scheduler/internal/models"
 	"time"
 
 	"github.com/go-redis/redis/v8"

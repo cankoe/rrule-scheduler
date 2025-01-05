@@ -3,9 +3,9 @@ package worker
 import (
 	"bytes"
 	"context"
-	"event-scheduler/internal/events"
 	"fmt"
 	"net/http"
+	"rrule-scheduler/internal/events"
 	"time"
 
 	"sync"

@@ -9,8 +9,8 @@ import (
 	"syscall"
 	"time"
 
-	"event-scheduler/internal/api"
-	"event-scheduler/internal/helpers"
+	"rrule-scheduler/internal/api"
+	"rrule-scheduler/internal/helpers"
 
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog/log"

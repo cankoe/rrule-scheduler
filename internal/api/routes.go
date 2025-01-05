@@ -1,7 +1,7 @@
 package api
 
 import (
-	"event-scheduler/internal/schedules"
+	"rrule-scheduler/internal/schedules"
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/mongo"

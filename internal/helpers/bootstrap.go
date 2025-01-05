@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
-	"event-scheduler/internal/config"
-	"event-scheduler/internal/database"
+	"rrule-scheduler/internal/config"
+	"rrule-scheduler/internal/database"
 
 	"github.com/go-redis/redis/v8"
 	"github.com/rs/zerolog"

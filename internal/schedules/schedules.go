@@ -3,9 +3,9 @@ package schedules
 import (
 	"context"
 	"errors"
-	"event-scheduler/internal/models"
 	"net/http"
 	"net/url"
+	"rrule-scheduler/internal/models"
 	"strconv"
 	"time"
 

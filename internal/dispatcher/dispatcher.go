@@ -2,7 +2,7 @@ package dispatcher
 
 import (
 	"context"
-	"event-scheduler/internal/events"
+	"rrule-scheduler/internal/events"
 	"strconv"
 	"time"
 

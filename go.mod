@@ -1,4 +1,4 @@
-module event-scheduler
+module rrule-scheduler
 
 go 1.23.2
 
