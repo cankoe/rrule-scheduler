@@ -104,10 +104,10 @@ Below is a brief summary of each service. (For full source code, see [`cmd/`](./
    ```
 
 2.	**Services**:
-	•	**MongoDB** available on port 27017.
-	•	**Redis** available on port 6379.
-	•	**API** exposed on port 8080.
-	•	**PreQueuer**, **Dispatcher**, and **Worker** run in the background.
+	- **MongoDB** available on port 27017.
+	- **Redis** available on port 6379.
+	- **API** exposed on port 8080.
+	- **PreQueuer**, **Dispatcher**, and **Worker** run in the background.
 
 3.	**Verify** that everything is up and running:
 	```bash
@@ -120,8 +120,8 @@ Below is a brief summary of each service. (For full source code, see [`cmd/`](./
 	```
 
 4. **Access the API**:
-- Visit: http://localhost:8080/swagger-ui for the Swagger UI
-- Or see the raw OpenAPI spec at: http://localhost:8080/docs/openapi.yml
+   - Visit: http://localhost:8080/swagger-ui for the Swagger UI
+   - Or see the raw OpenAPI spec at: http://localhost:8080/docs/openapi.yml
 
 ### Running From Source
 1. **Start MongoDB and Redis** (e.g., via Docker or local installation):
