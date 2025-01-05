@@ -20,7 +20,6 @@ func NewMongoClient(uri string) (*mongo.Client, error) {
 		return nil, fmt.Errorf("failed to connect to MongoDB: %w", err)
 	}
 
-	// Ping the database to ensure connectivity
 	if err := client.Ping(ctx, nil); err != nil {
 		log.Error().Err(err).Str("uri", uri).Msg("Failed to ping MongoDB")
 		return nil, fmt.Errorf("failed to ping MongoDB: %w", err)

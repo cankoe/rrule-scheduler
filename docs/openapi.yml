@@ -1,29 +1,23 @@
 openapi: 3.0.3
 info:
   title: Event Scheduler API
-  version: 1.0.0
-  description: |
-    The Event Scheduler API allows clients to manage recurring schedules and their events.
+  version: "1.0.0"
+  description: >
+    This API manages schedules and their corresponding events.
+    It includes endpoints for creating, reading, updating, and deleting schedules,
+    as well as listing pending or archived events.
+
 servers:
   - url: http://localhost:8080
     description: Local development server
-security:
-  - ApiKeyAuth: []
-
-tags:
-  - name: Schedules
-    description: Endpoints for managing schedules (user level)
-  - name: Events
-    description: Endpoints for retrieving events (user level)
 
 paths:
   /api/schedules:
     post:
-      summary: Create a new schedule
-      description: Create a new recurring schedule.
-      tags: [Schedules]
-      security:
-        - ApiKeyAuth: []
+      summary: Create a new Schedule
+      operationId: createSchedule
+      tags:
+        - Schedules
       requestBody:
         required: true
         content:
@@ -40,52 +34,57 @@ paths:
                 properties:
                   id:
                     type: string
-                    description: The unique ID of the created schedule.
-                    example: "schedule123"
+                    description: The MongoDB ObjectID of the newly created schedule.
         '400':
-          description: Invalid request body.
+          description: Invalid request body or validation error.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/HTTPError'
         '500':
           description: Internal server error.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/HTTPError'
+    parameters: []
 
-  /api/schedules/{id}:
+  /api/schedules/{scheduleId}:
     put:
-      summary: Update an existing schedule
-      description: Update the details of a specific schedule.
-      tags: [Schedules]
-      security:
-        - ApiKeyAuth: []
+      summary: Update an existing Schedule
+      operationId: updateSchedule
+      tags:
+        - Schedules
       parameters:
-        - in: path
-          name: id
-          description: The ID of the schedule to update.
-          required: true
-          schema:
-            type: string
+        - $ref: '#/components/parameters/ScheduleIdParam'
       requestBody:
         required: true
         content:
           application/json:
             schema:
+              description: Partial schedule fields to update (excluding read-only fields).
               type: object
-              description: Fields to update in the schedule.
               properties:
                 name:
                   type: string
-                  example: "Updated Backup"
+                  description: The new schedule name.
                 rrule:
                   type: string
-                  example: "FREQ=WEEKLY;INTERVAL=1"
+                  description: The new RRULE definition.
                 callback_url:
                   type: string
-                  example: "https://example.com/updated-callback"
+                  format: uri
+                  description: The new callback URL to call.
+                method:
+                  type: string
+                  description: HTTP method to use for callbacks.
+                headers:
+                  type: object
+                  additionalProperties:
+                    type: string
+                body:
+                  type: string
+                  description: Body content for callback requests.
       responses:
         '200':
           description: Schedule updated successfully.
@@ -96,41 +95,35 @@ paths:
                 properties:
                   message:
                     type: string
-                    example: "Schedule updated successfully."
         '400':
-          description: Invalid request body or missing schedule ID.
+          description: Invalid schedule ID or invalid JSON body.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/HTTPError'
         '404':
           description: Schedule not found.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/HTTPError'
         '500':
           description: Internal server error.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/HTTPError'
+
     delete:
-      summary: Delete a schedule and its events
-      description: Delete a schedule and all events associated with it.
-      tags: [Schedules]
-      security:
-        - ApiKeyAuth: []
+      summary: Delete a Schedule and its associated Events
+      operationId: deleteSchedule
+      tags:
+        - Schedules
       parameters:
-        - in: path
-          name: id
-          description: The ID of the schedule to delete.
-          required: true
-          schema:
-            type: string
+        - $ref: '#/components/parameters/ScheduleIdParam'
       responses:
         '200':
-          description: Schedule and events deleted successfully.
+          description: Schedule (and associated events) deleted successfully.
           content:
             application/json:
               schema:
@@ -138,55 +131,38 @@ paths:
                 properties:
                   message:
                     type: string
-                    example: "Schedule and associated events deleted successfully."
         '400':
-          description: Missing or invalid schedule ID.
+          description: Invalid schedule ID format.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/HTTPError'
         '404':
           description: Schedule not found.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/HTTPError'
         '500':
           description: Internal server error.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/HTTPError'
 
-  /api/schedules/{id}/events/pending:
+  /api/schedules/{scheduleId}/events/pending:
     get:
-      summary: Get pending events for a schedule
-      description: Retrieve all pending events for a given schedule ID with pagination.
-      tags: [Events]
-      security:
-        - ApiKeyAuth: []
+      summary: Get the pending (upcoming) events for a Schedule
+      operationId: getPendingEvents
+      tags:
+        - Events
       parameters:
-        - in: path
-          name: id
-          description: The ID of the schedule for which to retrieve pending events.
-          required: true
-          schema:
-            type: string
-        - in: query
-          name: page
-          description: The page number for pagination.
-          schema:
-            type: integer
-            default: 1
-        - in: query
-          name: limit
-          description: The number of items per page.
-          schema:
-            type: integer
-            default: 10
+        - $ref: '#/components/parameters/ScheduleIdParam'
+        - $ref: '#/components/parameters/LimitQueryParam'
+        - $ref: '#/components/parameters/PageQueryParam'
       responses:
         '200':
-          description: Pending events retrieved successfully.
+          description: List of pending (non-archived) events.
           content:
             application/json:
               schema:
@@ -198,52 +174,36 @@ paths:
                       $ref: '#/components/schemas/Event'
                   page:
                     type: integer
-                    example: 1
+                    description: Current page of results.
                   limit:
                     type: integer
-                    example: 10
+                    description: Number of items per page.
         '400':
-          description: Missing schedule ID.
+          description: Missing or invalid schedule ID.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/HTTPError'
         '500':
-          description: Internal server error.
+          description: Failed to fetch events.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/HTTPError'
 
-  /api/schedules/{id}/events/history:
+  /api/schedules/{scheduleId}/events/history:
     get:
-      summary: Get archived events for a schedule
-      description: Retrieve all archived events for a given schedule ID with pagination.
-      tags: [Events]
-      security:
-        - ApiKeyAuth: []
+      summary: Get the archived (historical) events for a Schedule
+      operationId: getArchivedEvents
+      tags:
+        - Events
       parameters:
-        - in: path
-          name: id
-          description: The ID of the schedule for which to retrieve archived events.
-          required: true
-          schema:
-            type: string
-        - in: query
-          name: page
-          description: The page number for pagination.
-          schema:
-            type: integer
-            default: 1
-        - in: query
-          name: limit
-          description: The number of items per page.
-          schema:
-            type: integer
-            default: 10
+        - $ref: '#/components/parameters/ScheduleIdParam'
+        - $ref: '#/components/parameters/LimitQueryParam'
+        - $ref: '#/components/parameters/PageQueryParam'
       responses:
         '200':
-          description: Archived events retrieved successfully.
+          description: List of archived (historical) events.
           content:
             application/json:
               schema:
@@ -255,118 +215,170 @@ paths:
                       $ref: '#/components/schemas/Event'
                   page:
                     type: integer
-                    example: 1
                   limit:
                     type: integer
-                    example: 10
         '400':
-          description: Missing schedule ID.
+          description: Missing or invalid schedule ID.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/HTTPError'
         '500':
-          description: Internal server error.
+          description: Failed to fetch events.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/HTTPError'
 
 components:
-  securitySchemes:
-    ApiKeyAuth:
-      type: apiKey
-      in: header
-      name: X-API-KEY
+  parameters:
+    ScheduleIdParam:
+      name: scheduleId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: MongoDB ObjectID of the schedule.
+
+    LimitQueryParam:
+      name: limit
+      in: query
+      required: false
+      description: Number of items per page.
+      schema:
+        type: integer
+        default: 10
+
+    PageQueryParam:
+      name: page
+      in: query
+      required: false
+      description: Page number to retrieve.
+      schema:
+        type: integer
+        default: 1
 
   schemas:
-    Schedule:
+    HTTPError:
       type: object
       properties:
-        _id:
+        error:
           type: string
-          description: Unique ID of the schedule.
-          example: "schedule123"
-        name:
-          type: string
-          description: Human-readable name for the schedule.
-          example: "Daily Backup"
-        rrule:
-          type: string
-          description: Recurrence rule for the event (RFC 5545 format).
-          example: "FREQ=DAILY;INTERVAL=1"
-        callback_url:
-          type: string
-          description: The URL to call when the event is triggered.
-          example: "https://example.com/callback"
-        created_at:
-          type: string
-          format: date-time
-          description: Timestamp when the schedule was created.
-          example: "2024-12-18T10:00:00Z"
+          description: Error message detailing the issue.
 
     ScheduleCreateRequest:
       type: object
-      required: [name, rrule, callback_url]
+      required:
+        - name
+        - rrule
+        - callback_url
       properties:
         name:
           type: string
-          example: "Daily Backup"
+          description: Name of the schedule.
+          example: "Daily Report Generation"
         rrule:
           type: string
+          description: RRULE describing the repeating schedule.
           example: "FREQ=DAILY;INTERVAL=1"
         callback_url:
           type: string
-          example: "https://example.com/callback"
+          format: uri
+          description: Where the worker will make an HTTP request.
+          example: "https://example.org/my-callback"
+        method:
+          type: string
+          description: HTTP method to use for callbacks (GET, POST, etc.).
+          example: "POST"
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+          description: Optional headers for the callback request.
+          example:
+            Content-Type: application/json
+        body:
+          type: string
+          description: Optional body content for the callback.
+          example: '{"payload":"some data"}'
+
+    Schedule:
+      type: object
+      properties:
+        id:
+          type: string
+          description: MongoDB ObjectID.
+          example: "64b76c5986b6c9f24f1c0952"
+        name:
+          type: string
+          description: Human-friendly name of the schedule.
+          example: "Daily Data Sync"
+        rrule:
+          type: string
+          description: RRULE describing the repeating schedule.
+          example: "FREQ=DAILY;INTERVAL=1"
+        callback_url:
+          type: string
+          format: uri
+          description: Callback endpoint.
+          example: "https://example.com/hook"
+        method:
+          type: string
+          description: HTTP method used for the callback.
+          example: "POST"
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+          description: Optional custom headers for callback request.
+          example:
+            Authorization: Bearer abc123
+        body:
+          type: string
+          description: Body content for callback requests.
+          example: '{"key":"value"}'
+        created_at:
+          type: string
+          format: date-time
+          description: Timestamp schedule was created.
 
     Event:
       type: object
       properties:
         _id:
           type: string
-          description: Unique ID of the event.
-          example: "event456"
+          description: MongoDB ObjectID of the event.
+          example: "64c10d4286b6c9f24f1c0952"
         schedule_id:
           type: string
-          description: ID of the related schedule.
-          example: "schedule123"
+          description: The schedule's MongoDB ObjectID to which this event belongs.
+          example: "64b76c5986b6c9f24f1c0952"
         run_time:
           type: string
           format: date-time
-          description: Exact time the event should be executed.
-          example: "2024-12-18T12:00:00Z"
+          description: The date/time at which the event is/was due to run.
         status:
           type: array
-          description: Array of status entries for the event.
           items:
-            $ref: '#/components/schemas/StatusEntry'
+            type: object
+            properties:
+              time:
+                type: string
+                format: date-time
+              status:
+                type: string
+                example: "ready_queue"
+              message:
+                type: string
+                example: "Event pre-queued for ready queue"
+          description: A list of status changes with timestamps and messages.
         created_at:
           type: string
           format: date-time
-          description: Timestamp when the event was created.
-          example: "2024-12-18T10:00:00Z"
+          description: Timestamp the event was created.
 
-    StatusEntry:
-      type: object
-      properties:
-        time:
-          type: string
-          format: date-time
-          description: Timestamp of the status update.
-          example: "2024-12-18T10:05:00Z"
-        status:
-          type: string
-          description: Status value of the event.
-          example: "ready_queue"
-        message:
-          type: string
-          description: Additional information about the status update.
-          example: "Event pre-queued for ready queue"
-
-    ErrorResponse:
-      type: object
-      properties:
-        error:
-          type: string
-          description: A descriptive error message.
-          example: "Invalid request body."
+tags:
+  - name: Schedules
+    description: Endpoints related to creating and managing schedules
+  - name: Events
+    description: Endpoints related to viewing events (pending or history)

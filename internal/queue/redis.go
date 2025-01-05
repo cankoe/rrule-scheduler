@@ -13,9 +13,8 @@ func NewRedisClient(host string, port int) (*redis.Client, error) {
 	addr := fmt.Sprintf("%s:%d", host, port)
 	client := redis.NewClient(&redis.Options{
 		Addr: addr,
-		DB:   0, // Default database
+		DB:   0,
 	})
-
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 

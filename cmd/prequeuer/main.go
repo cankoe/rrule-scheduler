@@ -2,119 +2,63 @@ package main
 
 import (
 	"context"
+	"os"
+	"os/signal"
+	"sync"
+	"syscall"
 	"time"
 
 	"event-scheduler/internal/helpers"
-	"event-scheduler/internal/models"
+	"event-scheduler/internal/prequeuer"
 
-	"github.com/go-redis/redis/v8"
 	"github.com/rs/zerolog/log"
-	"github.com/teambition/rrule-go"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo"
 )
 
 func main() {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var wg sync.WaitGroup
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		sig := <-sigChan
+		log.Info().Msgf("Received signal %s, shutting down Prequeuer gracefully...", sig)
+		cancel()
+	}()
+
 	components, err := helpers.InitializeCommonComponents("prequeuer")
 	if err != nil {
 		log.Fatal().Err(err)
 	}
-	defer components.CloseAll(context.Background())
 
 	cfg := components.Config
-
-	eventsCollection := components.MongoDatabase.Collection("events")
-	schedulesCollection := components.MongoDatabase.Collection("schedules")
+	eventsCol := components.MongoDatabase.Collection("events")
+	schedulesCol := components.MongoDatabase.Collection("schedules")
 
 	tickerInterval := time.Duration(cfg.PreQueuer.TickerIntervalSeconds) * time.Second
 	eventTimeframe := time.Duration(cfg.PreQueuer.EventTimeframeMinutes) * time.Minute
 
-	ticker := time.NewTicker(tickerInterval)
-	defer ticker.Stop()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		ticker := time.NewTicker(tickerInterval)
+		defer ticker.Stop()
 
-	log.Info().Msg("Prequeuer started. Generating events...")
-	for range ticker.C {
-		generateEvents(schedulesCollection, eventsCollection, components.RedisClient, eventTimeframe)
-	}
-}
-
-func generateEvents(schedulesCollection, eventsCollection *mongo.Collection, redisClient *redis.Client, eventTimeframe time.Duration) {
-	ctx := context.Background()
-	now := time.Now().UTC()
-	endTime := now.Add(eventTimeframe)
-
-	log.Info().Time("start_time", now).Time("end_time", endTime).Msg("Generating events for timeframe")
-
-	cursor, err := schedulesCollection.Find(ctx, bson.M{})
-	if err != nil {
-		log.Error().Err(err).Msg("Error fetching schedules")
-		return
-	}
-	defer cursor.Close(ctx)
-
-	for cursor.Next(ctx) {
-		var schedule models.Schedule
-		if err := cursor.Decode(&schedule); err != nil {
-			log.Error().Err(err).Msg("Error decoding schedule")
-			continue
-		}
-
-		rule, err := rrule.StrToRRule(schedule.RRule)
-		if err != nil {
-			log.Error().Err(err).Str("schedule_id", schedule.ID).Msg("Invalid RRULE")
-			continue
-		}
-
-		occurrences := rule.Between(now, endTime, false)
-		if len(occurrences) == 0 {
-			continue
-		}
-
-		for _, occurrence := range occurrences {
-			// Check if an event for this schedule and run_time already exists
-			existing := eventsCollection.FindOne(ctx, bson.M{
-				"schedule_id": schedule.ID,
-				"run_time":    occurrence,
-			})
-
-			if existing.Err() == nil {
-				// Event already exists, skip
-				log.Warn().Str("schedule_id", schedule.ID).Time("run_time", occurrence).Msg("Event already exists, skipping")
-				continue
+		log.Info().Msg("Prequeuer started. Generating events...")
+		for {
+			select {
+			case <-ctx.Done():
+				log.Info().Msg("Prequeuer is shutting down...")
+				return
+			case <-ticker.C:
+				prequeuer.GenerateEvents(ctx, schedulesCol, eventsCol, components.RedisClient, eventTimeframe)
 			}
-
-			// Create a new event
-			event := models.Event{
-				ScheduleID: schedule.ID,
-				RunTime:    occurrence,
-				Status: []models.StatusEntry{
-					{
-						Time:    now,
-						Status:  "ready_queue",
-						Message: "Event pre-queued for ready queue",
-					},
-				},
-				CreatedAt: now,
-			}
-
-			insertResult, err := eventsCollection.InsertOne(ctx, event)
-			if err != nil {
-				log.Error().Err(err).Str("schedule_id", schedule.ID).Time("occurrence", occurrence).Msg("Failed to insert event")
-				continue
-			}
-
-			eventID := insertResult.InsertedID.(primitive.ObjectID).Hex()
-			err = redisClient.ZAdd(ctx, "ready_queue", &redis.Z{
-				Score:  float64(occurrence.Unix()),
-				Member: eventID,
-			}).Err()
-			if err != nil {
-				log.Error().Err(err).Str("event_id", eventID).Msg("Failed to enqueue event in ready_queue")
-				continue
-			}
-
-			log.Info().Str("event_id", eventID).Str("schedule_id", schedule.ID).Time("run_time", occurrence).Msg("Pre-queued event")
 		}
-	}
+	}()
+
+	wg.Wait()
+	components.CloseAll(context.Background())
+	log.Info().Msg("Prequeuer exited gracefully")
 }

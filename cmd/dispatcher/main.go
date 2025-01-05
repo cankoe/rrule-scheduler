@@ -2,90 +2,60 @@ package main
 
 import (
 	"context"
-	"strconv"
+	"os"
+	"os/signal"
+	"sync"
+	"syscall"
 	"time"
 
+	"event-scheduler/internal/dispatcher"
 	"event-scheduler/internal/helpers"
 
-	"github.com/go-redis/redis/v8"
 	"github.com/rs/zerolog/log"
-	"go.mongodb.org/mongo-driver/mongo"
 )
 
 func main() {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var wg sync.WaitGroup
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
+	go func() {
+		sig := <-sigChan
+		log.Info().Msgf("Received signal %s, shutting down Dispatcher gracefully...", sig)
+		cancel()
+	}()
+
 	components, err := helpers.InitializeCommonComponents("dispatcher")
 	if err != nil {
 		log.Fatal().Err(err)
 	}
-	defer components.CloseAll(context.Background())
 
-	ticker := time.NewTicker(1 * time.Second)
-	defer ticker.Stop()
+	eventsCol := components.MongoDatabase.Collection("events")
+	archivedEventsCol := components.MongoDatabase.Collection("archived_events")
 
-	eventsCollection := components.MongoDatabase.Collection("events")
-	archivedEventsCollection := components.MongoDatabase.Collection("archived_events")
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		ticker := time.NewTicker(1 * time.Second)
+		defer ticker.Stop()
 
-	log.Info().Msg("Dispatcher started.")
-	for range ticker.C {
-		dispatchDueEvents(components.RedisClient, eventsCollection, archivedEventsCollection)
-	}
-}
-
-func dispatchDueEvents(redisClient *redis.Client, eventsCollection, archivedEventsCollection *mongo.Collection) {
-	ctx := context.Background()
-	now := time.Now().UTC().Unix()
-
-	eventIDs, err := redisClient.ZRangeByScore(ctx, "ready_queue", &redis.ZRangeBy{
-		Min: "-inf",
-		Max: strconv.FormatInt(now, 10),
-	}).Result()
-
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to fetch events from ready_queue")
-		return
-	}
-
-	if len(eventIDs) == 0 {
-		log.Debug().Msg("No due events found in ready_queue")
-		return
-	}
-
-	for _, eventID := range eventIDs {
-		// Attempt to remove the event from ready_queue
-		removedCount, err := redisClient.ZRem(ctx, "ready_queue", eventID).Result()
-		if err != nil {
-			log.Error().Err(err).Str("event_id", eventID).Msg("Failed to remove event from ready_queue")
-			recordErrorStatus(ctx, eventsCollection, archivedEventsCollection, eventID, "Failed to remove from ready_queue: "+err.Error())
-			continue
+		log.Info().Msg("Dispatcher started.")
+		for {
+			select {
+			case <-ctx.Done():
+				log.Info().Msg("Dispatcher is shutting down...")
+				return
+			case <-ticker.C:
+				dispatcher.DispatchDueEvents(ctx, components.RedisClient, eventsCol, archivedEventsCol)
+			}
 		}
+	}()
 
-		// If removedCount is 0, it means another dispatcher already processed this event
-		if removedCount == 0 {
-			log.Warn().Str("event_id", eventID).Msg("Event already removed by another dispatcher, skipping")
-			continue
-		}
-
-		// Update event status in mongodb
-		if err := helpers.UpdateEventStatus(ctx, eventsCollection, eventID, "worker_queue", "Event dispatched to worker queue"); err != nil {
-			log.Error().Err(err).Str("event_id", eventID).Msg("Failed to update event status to worker_queue")
-			recordErrorStatus(ctx, eventsCollection, archivedEventsCollection, eventID, "Failed to update status to worker_queue: "+err.Error())
-			continue
-		}
-
-		// Push the event to the worker_queue
-		if err := redisClient.LPush(ctx, "worker_queue", eventID).Err(); err != nil {
-			log.Error().Err(err).Str("event_id", eventID).Msg("Failed to push event to worker_queue")
-			recordErrorStatus(ctx, eventsCollection, archivedEventsCollection, eventID, "Failed to push to worker_queue: "+err.Error())
-			continue
-		}
-
-		log.Info().Str("event_id", eventID).Msg("Dispatched event to worker_queue")
-	}
-}
-
-func recordErrorStatus(ctx context.Context, eventsCollection, archivedEventsCollection *mongo.Collection, eventID, errorMsg string) {
-	err := helpers.UpdateAndArchiveEvent(ctx, eventsCollection, archivedEventsCollection, eventID, "error", errorMsg)
-	if err != nil {
-		log.Error().Err(err).Str("event_id", eventID).Msg("Failed to record error status")
-	}
+	wg.Wait()
+	components.CloseAll(context.Background())
+	log.Info().Msg("Dispatcher exited gracefully")
 }

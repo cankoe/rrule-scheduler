@@ -25,8 +25,13 @@ type Config struct {
 	} `mapstructure:"prequeuer"`
 
 	Worker struct {
+		Count      int `mapstructure:"count"`
 		MaxRetries int `mapstructure:"max_retries"`
-	}
+	} `mapstructure:"worker"`
+
+	Log struct {
+		Level string `mapstructure:"level"`
+	} `mapstructure:"log"`
 }
 
 // LoadConfig loads the configuration from file, environment variables, and command-line arguments.
@@ -42,6 +47,8 @@ func LoadConfig(configPath string, args []string) (*Config, error) {
 	v.SetDefault("prequeuer.ticker_interval_seconds", 30)
 	v.SetDefault("prequeuer.event_timeframe_minutes", 60)
 	v.SetDefault("worker.max_retries", 3)
+	v.SetDefault("worker.count", 5)
+	v.SetDefault("log.level", "info")
 
 	// Read from config file if present
 	v.SetConfigFile(configPath)
@@ -58,11 +65,15 @@ func LoadConfig(configPath string, args []string) (*Config, error) {
 	bindEnvOrPanic(v, "prequeuer.ticker_interval_seconds", "PREQUEUER_TICKER_INTERVAL_SECONDS")
 	bindEnvOrPanic(v, "prequeuer.event_timeframe_minutes", "PREQUEUER_EVENT_TIMEFRAME_MINUTES")
 	bindEnvOrPanic(v, "worker.max_retries", "WORKER_MAX_RETRIES")
+	bindEnvOrPanic(v, "worker.count", "WORKER_COUNT")
+	bindEnvOrPanic(v, "log.level", "LOG_LEVEL")
 
 	// Parse command-line flags for prequeuer
 	preTicker := flag.Int("prequeuer-ticker-seconds", 0, "Override PreQueuer ticker interval in seconds")
 	preTimeframe := flag.Int("prequeuer-timeframe-minutes", 0, "Override PreQueuer event timeframe in minutes")
-	workerMaxRetries := flag.Int("max-retries", 0, "Override Worker max retries")
+	workerMaxRetries := flag.Int("worker-max-retries", 0, "Override Worker max retries")
+	workerCount := flag.Int("worker-count", 0, "Override Worker Count")
+	logLevel := flag.String("log-level", "", "Override log level")
 	flag.CommandLine.Parse(args)
 
 	// Apply command-line flags if provided
@@ -75,6 +86,10 @@ func LoadConfig(configPath string, args []string) (*Config, error) {
 	if *workerMaxRetries > 0 {
 		v.Set("worker.max_retries", *workerMaxRetries)
 	}
+	if *workerCount > 0 {
+		v.Set("worker.count", *workerCount)
+	}
+	v.Set("log.level", *logLevel)
 
 	cfg := &Config{}
 	if err := v.Unmarshal(cfg); err != nil {
@@ -95,11 +110,17 @@ func bindEnvOrPanic(v *viper.Viper, key, env string) {
 }
 
 func validateConfig(cfg *Config) error {
+	// Validate Mongo settings
 	if cfg.Mongo.URI == "" {
 		log.Warn().Msg("MONGO_URI not provided, using default")
 	}
 	if cfg.Mongo.Database == "" {
 		log.Warn().Msg("MONGO_DATABASE not provided, using default")
+	}
+
+	// Validate Redis settings
+	if cfg.Redis.Host == "" {
+		log.Warn().Msg("REDIS_HOST not provided, using default")
 	}
 
 	// Validate PreQueuer settings
@@ -113,6 +134,9 @@ func validateConfig(cfg *Config) error {
 	// Validate Worker settings
 	if cfg.Worker.MaxRetries <= 0 {
 		return fmt.Errorf("worker max_retries must be > 0, got %d", cfg.Worker.MaxRetries)
+	}
+	if cfg.Worker.Count <= 0 {
+		return fmt.Errorf("worker count must be > 0, got %d", cfg.Worker.MaxRetries)
 	}
 
 	return nil

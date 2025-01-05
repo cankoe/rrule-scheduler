@@ -9,3 +9,10 @@ redis:
 prequeuer:
   ticker_interval_seconds: 20
   event_timeframe_minutes: 10
+
+worker:
+  count: 5
+  max_retries: 3
+
+log:
+  level: "info"
