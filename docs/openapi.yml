@@ -50,6 +50,38 @@ paths:
     parameters: []
 
   /api/schedules/{scheduleId}:
+    get:
+      summary: Get a single schedule by ID
+      operationId: getSchedule
+      tags:
+        - Schedules
+      parameters:
+        - $ref: '#/components/parameters/ScheduleIdParam'
+      responses:
+        '200':
+          description: Schedule details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Schedule'
+        '400':
+          description: Invalid schedule ID format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPError'
+        '404':
+          description: Schedule not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPError'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPError'
     put:
       summary: Update an existing Schedule
       operationId: updateSchedule
@@ -238,7 +270,9 @@ components:
       required: true
       schema:
         type: string
-      description: MongoDB ObjectID of the schedule.
+        format: objectid
+        example: 64b76c5986b6c9f24f1c0952
+      description: MongoDB ObjectID of the schedule
 
     LimitQueryParam:
       name: limit
@@ -263,8 +297,18 @@ components:
       type: object
       properties:
         error:
-          type: string
-          description: Error message detailing the issue.
+          type: object
+          properties:
+            code:
+              type: string
+              enum: [invalid_request, not_found, database_error, validation_failed, internal_error]
+              example: validation_failed
+            message:
+              type: string
+              example: Invalid RRULE format
+          required:
+            - code
+            - message
 
     ScheduleCreateRequest:
       type: object
@@ -307,40 +351,34 @@ components:
       properties:
         id:
           type: string
-          description: MongoDB ObjectID.
-          example: "64b76c5986b6c9f24f1c0952"
+          format: objectid
+          example: 64b76c5986b6c9f24f1c0952
         name:
           type: string
-          description: Human-friendly name of the schedule.
-          example: "Daily Data Sync"
+          example: Daily Backup
         rrule:
           type: string
-          description: RRULE describing the repeating schedule.
-          example: "FREQ=DAILY;INTERVAL=1"
+          example: FREQ=DAILY
         callback_url:
           type: string
           format: uri
-          description: Callback endpoint.
-          example: "https://example.com/hook"
+          example: https://api.example.com/backup
         method:
           type: string
-          description: HTTP method used for the callback.
-          example: "POST"
+          example: POST
         headers:
           type: object
           additionalProperties:
             type: string
-          description: Optional custom headers for callback request.
           example:
-            Authorization: Bearer abc123
+            Authorization: Bearer token
         body:
           type: string
-          description: Body content for callback requests.
-          example: '{"key":"value"}'
+          example: '{"action":"backup"}'
         created_at:
           type: string
           format: date-time
-          description: Timestamp schedule was created.
+          example: 2024-02-20T09:00:00Z
 
     Event:
       type: object
