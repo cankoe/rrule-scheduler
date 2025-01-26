@@ -8,8 +8,8 @@ import (
 	"syscall"
 	"time"
 
-	"rrule-scheduler/internal/helpers"
-	"rrule-scheduler/internal/prequeuer"
+	"github.com/cankoe/rrule-scheduler/internal/helpers"
+	"github.com/cankoe/rrule-scheduler/internal/prequeuer"
 
 	"github.com/rs/zerolog/log"
 )

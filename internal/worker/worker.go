@@ -5,8 +5,9 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"rrule-scheduler/internal/events"
 	"time"
+
+	"github.com/cankoe/rrule-scheduler/internal/events"
 
 	"sync"
 

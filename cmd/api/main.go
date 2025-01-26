@@ -9,8 +9,8 @@ import (
 	"syscall"
 	"time"
 
-	"rrule-scheduler/internal/api"
-	"rrule-scheduler/internal/helpers"
+	"github.com/cankoe/rrule-scheduler/internal/api"
+	"github.com/cankoe/rrule-scheduler/internal/helpers"
 
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog/log"

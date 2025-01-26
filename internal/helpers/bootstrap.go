@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
-	"rrule-scheduler/internal/config"
-	"rrule-scheduler/internal/database"
+	"github.com/cankoe/rrule-scheduler/internal/config"
+	"github.com/cankoe/rrule-scheduler/internal/database"
 
 	"github.com/go-redis/redis/v8"
 	"github.com/rs/zerolog"

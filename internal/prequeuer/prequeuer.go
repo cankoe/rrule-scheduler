@@ -2,8 +2,9 @@ package prequeuer
 
 import (
 	"context"
-	"rrule-scheduler/internal/models"
 	"time"
+
+	"github.com/cankoe/rrule-scheduler/internal/models"
 
 	"github.com/go-redis/redis/v8"
 	"github.com/rs/zerolog/log"

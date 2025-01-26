@@ -1,4 +1,4 @@
-module rrule-scheduler
+module github.com/cankoe/rrule-scheduler
 
 go 1.23.2
 

@@ -8,8 +8,8 @@ import (
 	"syscall"
 	"time"
 
-	"rrule-scheduler/internal/dispatcher"
-	"rrule-scheduler/internal/helpers"
+	"github.com/cankoe/rrule-scheduler/internal/dispatcher"
+	"github.com/cankoe/rrule-scheduler/internal/helpers"
 
 	"github.com/rs/zerolog/log"
 )

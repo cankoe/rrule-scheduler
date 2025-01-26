@@ -5,9 +5,9 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
-	"rrule-scheduler/internal/models"
 	"strconv"
-	"time"
+
+	"github.com/cankoe/rrule-scheduler/internal/models"
 
 	"github.com/gin-gonic/gin"
 	"github.com/teambition/rrule-go"
@@ -17,6 +17,22 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
+const (
+	ErrCodeInvalidRequest   = "invalid_request"
+	ErrCodeNotFound         = "not_found"
+	ErrCodeDatabaseError    = "database_error"
+	ErrCodeValidationFailed = "validation_failed"
+)
+
+type ApiError struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+func (e *ApiError) Error() string {
+	return e.Message
+}
+
 // RegisterScheduleRoutes defines HTTP routes for schedules & their events.
 func RegisterScheduleRoutes(r *gin.Engine, db *mongo.Database) {
 	schedulesCol := db.Collection("schedules")
@@ -24,6 +40,17 @@ func RegisterScheduleRoutes(r *gin.Engine, db *mongo.Database) {
 	archivedEventsCol := db.Collection("archived_events")
 
 	group := r.Group("/api")
+
+	group.GET("/schedules/:id", func(c *gin.Context) {
+		scheduleID := c.Param("id")
+		schedule, err := getScheduleByID(c.Request.Context(), schedulesCol, scheduleID)
+		if err != nil {
+			statusCode, apiErr := mapErrorToStatusCode(err)
+			c.JSON(statusCode, gin.H{"error": apiErr})
+			return
+		}
+		c.JSON(http.StatusOK, schedule)
+	})
 
 	group.POST("/schedules", func(c *gin.Context) {
 		var schedule models.Schedule
@@ -33,7 +60,8 @@ func RegisterScheduleRoutes(r *gin.Engine, db *mongo.Database) {
 		}
 		objID, err := createSchedule(c.Request.Context(), schedulesCol, &schedule)
 		if err != nil {
-			c.JSON(mapErrorToStatusCode(err), gin.H{"error": err.Error()})
+			statusCode, apiErr := mapErrorToStatusCode(err)
+			c.JSON(statusCode, gin.H{"error": apiErr})
 			return
 		}
 		c.JSON(http.StatusCreated, gin.H{"id": objID.Hex()})
@@ -47,7 +75,8 @@ func RegisterScheduleRoutes(r *gin.Engine, db *mongo.Database) {
 			return
 		}
 		if err := updateSchedule(c.Request.Context(), schedulesCol, scheduleID, updates); err != nil {
-			c.JSON(mapErrorToStatusCode(err), gin.H{"error": err.Error()})
+			statusCode, apiErr := mapErrorToStatusCode(err)
+			c.JSON(statusCode, gin.H{"error": apiErr})
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"message": "Schedule updated successfully."})
@@ -56,7 +85,8 @@ func RegisterScheduleRoutes(r *gin.Engine, db *mongo.Database) {
 	group.DELETE("/schedules/:id", func(c *gin.Context) {
 		scheduleID := c.Param("id")
 		if err := deleteScheduleAndEvents(c.Request.Context(), schedulesCol, eventsCol, scheduleID); err != nil {
-			c.JSON(mapErrorToStatusCode(err), gin.H{"error": err.Error()})
+			statusCode, apiErr := mapErrorToStatusCode(err)
+			c.JSON(statusCode, gin.H{"error": apiErr})
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"message": "Schedule and associated events deleted."})
@@ -75,17 +105,48 @@ func RegisterScheduleRoutes(r *gin.Engine, db *mongo.Database) {
 /*                           DB & Validation                              */
 /**************************************************************************/
 
+func getScheduleByID(ctx context.Context, col *mongo.Collection, scheduleHexID string) (*models.Schedule, error) {
+	oid, err := primitive.ObjectIDFromHex(scheduleHexID)
+	if err != nil {
+		return nil, &ApiError{
+			Code:    ErrCodeInvalidRequest,
+			Message: "Invalid schedule ID format",
+		}
+	}
+
+	var schedule models.Schedule
+	err = col.FindOne(ctx, bson.M{"_id": oid}).Decode(&schedule)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, &ApiError{
+				Code:    ErrCodeNotFound,
+				Message: "Schedule not found",
+			}
+		}
+		return nil, &ApiError{
+			Code:    ErrCodeDatabaseError,
+			Message: "Failed to retrieve schedule",
+		}
+	}
+
+	// Convert ObjectID to hex string for response
+	schedule.ID = oid.Hex()
+	return &schedule, nil
+}
+
 func createSchedule(ctx context.Context, col *mongo.Collection, s *models.Schedule) (primitive.ObjectID, error) {
 	// Clear out any provided ID to let Mongo generate it
 	s.ID = ""
 	if err := validateSchedule(s); err != nil {
 		return primitive.NilObjectID, err
 	}
-	s.CreatedAt = time.Now().UTC()
 
 	res, err := col.InsertOne(ctx, s)
 	if err != nil {
-		return primitive.NilObjectID, errors.New("failed to create schedule in the database")
+		return primitive.NilObjectID, &ApiError{
+			Code:    ErrCodeDatabaseError,
+			Message: "Failed to create schedule in database",
+		}
 	}
 	oid, ok := res.InsertedID.(primitive.ObjectID)
 	if !ok {
@@ -176,16 +237,28 @@ func handleGetEvents(c *gin.Context, col *mongo.Collection) {
 
 func validateSchedule(s *models.Schedule) error {
 	if s.Name == "" {
-		return errors.New("schedule name cannot be empty")
+		return &ApiError{
+			Code:    ErrCodeValidationFailed,
+			Message: "Schedule name cannot be empty",
+		}
 	}
 	if s.RRule == "" {
-		return errors.New("RRULE cannot be empty")
+		return &ApiError{
+			Code:    ErrCodeValidationFailed,
+			Message: "RRULE cannot be empty",
+		}
 	}
 	if _, err := rrule.StrToRRule(s.RRule); err != nil {
-		return errors.New("invalid RRULE format")
+		return &ApiError{
+			Code:    ErrCodeValidationFailed,
+			Message: "Invalid RRULE format",
+		}
 	}
 	if _, err := url.ParseRequestURI(s.CallbackURL); err != nil {
-		return errors.New("invalid CallbackURL format")
+		return &ApiError{
+			Code:    ErrCodeValidationFailed,
+			Message: "Invalid callback URL format",
+		}
 	}
 	return nil
 }
@@ -210,20 +283,24 @@ func getPaginationParams(c *gin.Context) (int, int) {
 	return limit, page
 }
 
-func mapErrorToStatusCode(err error) int {
-	if err == nil {
-		return http.StatusOK
+func mapErrorToStatusCode(err error) (int, *ApiError) {
+	var apiErr *ApiError
+	if errors.As(err, &apiErr) {
+		switch apiErr.Code {
+		case ErrCodeInvalidRequest:
+			return http.StatusBadRequest, apiErr
+		case ErrCodeNotFound:
+			return http.StatusNotFound, apiErr
+		case ErrCodeValidationFailed:
+			return http.StatusUnprocessableEntity, apiErr
+		case ErrCodeDatabaseError:
+			return http.StatusInternalServerError, apiErr
+		}
 	}
-	switch err.Error() {
-	case "no schedule found with the specified ID":
-		return http.StatusNotFound
-	case "invalid schedule ID format",
-		"RRULE cannot be empty",
-		"invalid RRULE format",
-		"invalid CallbackURL format",
-		"schedule name cannot be empty":
-		return http.StatusBadRequest
-	default:
-		return http.StatusInternalServerError
+
+	// Default unknown error
+	return http.StatusInternalServerError, &ApiError{
+		Code:    "internal_error",
+		Message: "An unexpected error occurred",
 	}
 }

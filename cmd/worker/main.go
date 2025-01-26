@@ -7,8 +7,8 @@ import (
 	"sync"
 	"syscall"
 
-	"rrule-scheduler/internal/helpers"
-	"rrule-scheduler/internal/worker"
+	"github.com/cankoe/rrule-scheduler/internal/helpers"
+	"github.com/cankoe/rrule-scheduler/internal/worker"
 
 	"github.com/rs/zerolog/log"
 )

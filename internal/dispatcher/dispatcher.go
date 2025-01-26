@@ -2,9 +2,10 @@ package dispatcher
 
 import (
 	"context"
-	"rrule-scheduler/internal/events"
 	"strconv"
 	"time"
+
+	"github.com/cankoe/rrule-scheduler/internal/events"
 
 	"github.com/go-redis/redis/v8"
 	"github.com/rs/zerolog/log"
